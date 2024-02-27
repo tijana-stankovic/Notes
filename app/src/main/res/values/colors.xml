@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="dark_gray">#303030</color>
+    <color name="red">#FF0000</color>
+    <color name="green">#00FF00</color>
+    <color name="blue">#0000FF</color>
+    <color name="yellow">#FFFF00</color>
+
+    <color name="aboutBackground">#0000FF</color>
+    <color name="aboutTextColor">#FFFF00</color>
+
+    <color name="odd_row_color">#480675</color>
+    <color name="even_row_color">#540788</color>
+
+    <color name="textview_text">#F3E5F5</color>
+
+    <color name="inputlayouthint_color">#E1BEE7</color>
+
+    <color name="spinner_background">#D0D0D0</color>
+
+    <color name="textinputedittext_text">#3F51B5</color>
+    <color name="textinputedittext_background">#FFFF00</color>
+
+    <color name="background_color">#4A148C</color>
+    <color name="primary_color">#E1BEE7</color>
+
+    <color name="mtrl_textinput_default_box_stroke_color">#E1BEE7</color>
+</resources>

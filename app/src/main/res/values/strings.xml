@@ -1,0 +1,37 @@
+<resources>
+    <string name="app_name">Notes</string>
+    <string name="titleTxt">Notes</string>
+    <string name="btnNotesTxt">Notes</string>
+    <string name="btnCategoriesTxt">Categories</string>
+    <string name="btnAboutTxt">About</string>
+    <string name="author">Tijana Stankovic</string>
+    <string name="version">v1.01</string>
+    <string name="search_keywords">search keyword(s)</string>
+    <string name="no_notes_found">no notes found</string>
+    <string name="new_note">New</string>
+    <string name="note_title">Note title</string>
+    <string name="note_keywords">Note keyword(s)</string>
+    <string name="note_category">Note category</string>
+    <string name="note_content">Note content</string>
+    <string name="note_delete">Delete</string>
+    <string name="note_edit">Edit</string>
+    <string name="note_save">Save</string>
+    <string name="enter_title_mssg">Please, enter the title…</string>
+    <string name="enter_name_mssg">Please, enter the name…</string>
+    <string name="note_is_saved">The note is saved</string>
+    <string name="note_is_not_saved">Saving the note was not successful</string>
+    <string name="note_is_deleted">The note is deleted</string>
+    <string name="note_is_not_deleted">Deleting the note was not successful</string>
+    <string name="note_item_category">category</string>
+    <string name="note_item_subcategory">subcategory</string>
+    <string name="note_item_keywords">keywords</string>
+    <string name="note_item_note">note</string>
+    <string name="new_category">New</string>
+    <string name="category_name">Category name</string>
+    <string name="parent_category">Parent category</string>
+    <string name="cat_is_saved">The category is saved</string>
+    <string name="cat_is_not_saved">Saving the category was not successful</string>
+    <string name="cat_is_deleted">The category is deleted</string>
+    <string name="cat_is_not_deleted">Deleting the category was not successful</string>
+    <string name="no_cat_is_selected">no category is selected</string>
+</resources>
