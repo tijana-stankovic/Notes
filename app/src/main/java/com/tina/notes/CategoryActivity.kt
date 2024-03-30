@@ -9,9 +9,12 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.Spinner
 import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.textfield.TextInputLayout
+import kotlinx.coroutines.launch
 
 class CategoryActivity : AppCompatActivity() {
     companion object {
@@ -28,57 +31,98 @@ class CategoryActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_category)
 
-        parents = db.getCategories(0)
-
-        val categoryId = intent.getIntExtra(CategoryActivity.CATEGORY_ID, 0)
-        if (categoryId != 0) {
-            val dbCategory = db.getCategory(categoryId)
-            if (dbCategory != null) {
-                category = dbCategory
-            }
-        }
-
-        // for new category, get the default value for parent ID from parameter CategoryActivity.PARENT_ID
-        val parentId = intent.getIntExtra(CategoryActivity.PARENT_ID, 0)
-        if (category.id == 0) {
-            category.parentId = parentId
-        }
-
         val etCatName = findViewById<EditText>(R.id.etCatName)
-        etCatName.setText(category.name)
-
-        val adapter = ArrayAdapter(this, R.layout.spinner_selected_category, parents.map {it.name})
-        adapter.setDropDownViewResource(R.layout.spinner_dropdown_category)
         val spinnerParentCategory = findViewById<Spinner>(R.id.spinnerParentCategory)
-        spinnerParentCategory.adapter = adapter
-        val parentIndex = parents.indexOfFirst { it.id == category.parentId }
-        spinnerParentCategory.setSelection(parentIndex)
-
         val etParentCategory = findViewById<EditText>(R.id.etParentCategory)
-        etParentCategory.setText(parents[parentIndex].name)
+        val btnCategoryDelete = findViewById<Button>(R.id.btnCategoryDelete)
+        val btnCategoryEditSave = findViewById<Button>(R.id.btnCategoryEditSave)
+
         setReadOnly(etParentCategory, true) // this field is always read-only
 
-        if (category.id == 0) {
-            switchToReadOnly(false)
-        } else {
-            switchToReadOnly(true)
+        // initially, all others fields are read only
+        switchToReadOnly(true)
+        btnCategoryDelete.isEnabled = false
+        btnCategoryEditSave.isEnabled = false
+
+        val currentContext = this
+        lifecycleScope.launch {
+            val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+            progressBar.visibility = View.VISIBLE
+
+            parents = db.getCategories(0)
+
+            val categoryId = intent.getIntExtra(CategoryActivity.CATEGORY_ID, 0)
+            if (categoryId != 0) {
+                val dbCategory = db.getCategory(categoryId)
+                if (dbCategory != null) {
+                    category = dbCategory
+                }
+            }
+
+            // for new category, get the default value for parent ID from parameter CategoryActivity.PARENT_ID
+            val parentId = intent.getIntExtra(CategoryActivity.PARENT_ID, 0)
+            if (category.id == 0) {
+                category.parentId = parentId
+            }
+
+            etCatName.setText(category.name)
+
+            val adapter = ArrayAdapter(currentContext, R.layout.spinner_selected_category, parents.map {it.name})
+            adapter.setDropDownViewResource(R.layout.spinner_dropdown_category)
+            spinnerParentCategory.adapter = adapter
+            val parentIndex = parents.indexOfFirst { it.id == category.parentId }
+            spinnerParentCategory.setSelection(parentIndex)
+
+            etParentCategory.setText(parents[parentIndex].name)
+
+            progressBar.visibility = View.GONE
+
+            if (category.id == 0) {
+                switchToReadOnly(false)
+            } else {
+                switchToReadOnly(true)
+            }
+            btnCategoryDelete.isEnabled = true
+            btnCategoryEditSave.isEnabled = true
         }
 
-        val btnCategoryDelete = findViewById<Button>(R.id.btnCategoryDelete)
         btnCategoryDelete.setOnClickListener {
-            if (deleteCategory()) {
-                finish()
+            btnCategoryDelete.isEnabled = false
+            btnCategoryEditSave.isEnabled = false
+            lifecycleScope.launch {
+                val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+                progressBar.visibility = View.VISIBLE
+
+                val deleteOK: Boolean = deleteCategory()
+
+                btnCategoryDelete.isEnabled = true
+                btnCategoryEditSave.isEnabled = true
+                progressBar.visibility = View.GONE
+
+                if (deleteOK) {
+                    finish()
+                }
             }
         }
 
-        val btnCategoryEditSave = findViewById<Button>(R.id.btnCategoryEditSave)
         btnCategoryEditSave.setOnClickListener {
             if (readOnlyMode) {
                 switchToReadOnly(false)
             } else {
                 if (etCatName.getText().toString() != "") {
-                    saveCategory()
-                    switchToReadOnly(true)
+                    btnCategoryDelete.isEnabled = false
+                    btnCategoryEditSave.isEnabled = false
+                    lifecycleScope.launch {
+                        val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+                        progressBar.visibility = View.VISIBLE
+
+                        saveCategory()
+                        switchToReadOnly(true)
+
+                        btnCategoryDelete.isEnabled = true
+                        btnCategoryEditSave.isEnabled = true
+                        progressBar.visibility = View.GONE
+                    }
                 } else {
                     etCatName.requestFocus()
                     // Show the keyboard
@@ -128,7 +172,7 @@ class CategoryActivity : AppCompatActivity() {
         editText.isCursorVisible = !readOnly
     }
 
-    private fun saveCategory() {
+    suspend private fun saveCategory() {
         // Copy current spinner selected text to etCategory field
         val spinnerParentCategory = findViewById<Spinner>(R.id.spinnerParentCategory)
         val adapter = spinnerParentCategory.adapter as ArrayAdapter<*>
@@ -156,21 +200,19 @@ class CategoryActivity : AppCompatActivity() {
         }
     }
 
-    private fun deleteCategory(): Boolean {
-        val delOk: Boolean
+    suspend private fun deleteCategory(): Boolean {
+        var delOk: Boolean = false
 
         if (category.id != 0 && db.getCategory(category.id) != null) { // if the category exists in db
-            delOk = db.deleteCategory(category.id)
-            db.changeNotesCategory(category.id, category.parentId)
-            db.changeCategoriesParent(category.id, category.parentId)
+            delOk = db.deleteCategory(category.id, category.parentId)
         } else { // if this is a new category or category does not exists in the database anymore, then we simple set delOk = true
             delOk = true
         }
 
         if (delOk) {
-            Toast.makeText(this, getString(R.string.cat_is_deleted) , Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.cat_is_deleted), Toast.LENGTH_LONG).show()
         } else {
-            Toast.makeText(this, getString(R.string.cat_is_not_deleted) , Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.cat_is_not_deleted), Toast.LENGTH_LONG).show()
         }
 
         return delOk

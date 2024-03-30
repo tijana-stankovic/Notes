@@ -17,6 +17,18 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:visibility="invisible"
+        android:indeterminateTint="@color/red"
+        app:layout_constraintTop_toTopOf="@id/spinnerParentCategory"
+        app:layout_constraintBottom_toBottomOf="@id/spinnerParentCategory"
+        app:layout_constraintRight_toRightOf="@id/spinnerParentCategory"/>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvCategories"
         android:layout_width="0dp"

@@ -24,6 +24,18 @@
             android:textStyle="bold" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:visibility="invisible"
+        android:indeterminateTint="@color/red"
+        app:layout_constraintTop_toTopOf="@id/titleTextInputLayout"
+        app:layout_constraintBottom_toBottomOf="@id/titleTextInputLayout"
+        app:layout_constraintRight_toRightOf="@id/titleTextInputLayout"/>
+
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/keywordTextInputLayout"
         android:layout_width="match_parent"

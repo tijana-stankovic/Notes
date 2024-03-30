@@ -10,10 +10,14 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.textfield.TextInputLayout
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class NoteActivity : AppCompatActivity() {
     companion object {
@@ -39,64 +43,103 @@ class NoteActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_note)
 
-        categories = db.getAllCategories()
-
-        val noteId = intent.getIntExtra(NoteActivity.NOTE_ID, 0)
-        if (noteId != 0) {
-            val dbNote = db.getNote(noteId, true)
-            if (dbNote != null) {
-                note = dbNote
-            }
-        }
-
-        // for new note, get the default value for category ID from parameter NoteActivity.CATEGORY_ID
-        val categoryId = intent.getIntExtra(NoteActivity.CATEGORY_ID, 0)
-        if (note.id == 0) {
-            note.catId = categoryId
-        }
-
         val etTitle = findViewById<EditText>(R.id.etTitle)
-        etTitle.setText(note.title)
-
         val etKeywords = findViewById<EditText>(R.id.etKeywords)
-        etKeywords.setText(note.keywords)
-
         val etContent = findViewById<EditText>(R.id.etContent)
-        etContent.setText(note.content)
-
-        val adapter =
-            ArrayAdapter(this, R.layout.spinner_selected_category, categories.map { it.name })
-        adapter.setDropDownViewResource(R.layout.spinner_dropdown_category)
         val spinnerCategory = findViewById<Spinner>(R.id.spinnerCategory)
-        spinnerCategory.adapter = adapter
-        val categoryIndex = categories.indexOfFirst { it.id == note.catId }
-        spinnerCategory.setSelection(categoryIndex)
-
         val etCategory = findViewById<EditText>(R.id.etCategory)
-        etCategory.setText(categories[categoryIndex].name)
+        val btnDelete = findViewById<Button>(R.id.btnDelete)
+        val btnEditSave = findViewById<Button>(R.id.btnEditSave)
+
         setReadOnly(etCategory, true) // this field is always read-only
 
-        if (note.id == 0) {
-            switchToReadOnly(false)
-        } else {
-            switchToReadOnly(true)
+        // initially, all others fields are read only
+        switchToReadOnly(true)
+        btnDelete.isEnabled = false
+        btnEditSave.isEnabled = false
+
+        val currentContext = this
+        lifecycleScope.launch {
+            val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+            progressBar.visibility = View.VISIBLE
+
+            categories = db.getAllCategories()
+
+            val noteId = intent.getIntExtra(NoteActivity.NOTE_ID, 0)
+            if (noteId != 0) {
+                val dbNote = db.getNote(noteId, true)
+                if (dbNote != null) {
+                    note = dbNote
+                }
+            }
+
+            // for new note, get the default value for category ID from parameter NoteActivity.CATEGORY_ID
+            val categoryId = intent.getIntExtra(NoteActivity.CATEGORY_ID, 0)
+            if (note.id == 0) {
+                note.catId = categoryId
+            }
+
+            etTitle.setText(note.title)
+            etKeywords.setText(note.keywords)
+            etContent.setText(note.content)
+
+            val adapter =
+                ArrayAdapter(currentContext, R.layout.spinner_selected_category, categories.map { it.name })
+            adapter.setDropDownViewResource(R.layout.spinner_dropdown_category)
+            spinnerCategory.adapter = adapter
+            val categoryIndex = categories.indexOfFirst { it.id == note.catId }
+            spinnerCategory.setSelection(categoryIndex)
+
+            etCategory.setText(categories[categoryIndex].name)
+
+            progressBar.visibility = View.GONE
+
+            if (note.id == 0) {
+                switchToReadOnly(false)
+            } else {
+                switchToReadOnly(true)
+            }
+            btnDelete.isEnabled = true
+            btnEditSave.isEnabled = true
         }
 
-        val btnDelete = findViewById<Button>(R.id.btnDelete)
         btnDelete.setOnClickListener {
-            if (deleteNote()) {
-                finish()
+            btnDelete.isEnabled = false
+            btnEditSave.isEnabled = false
+            lifecycleScope.launch {
+                val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+                progressBar.visibility = View.VISIBLE
+
+                val deleteOK: Boolean = deleteNote()
+
+                btnDelete.isEnabled = true
+                btnEditSave.isEnabled = true
+                progressBar.visibility = View.GONE
+
+                if (deleteOK) {
+                    finish()
+                }
             }
         }
 
-        val btnEditSave = findViewById<Button>(R.id.btnEditSave)
         btnEditSave.setOnClickListener {
             if (readOnlyMode) {
                 switchToReadOnly(false)
             } else {
                 if (etTitle.getText().toString() != "") {
-                    saveNote()
-                    switchToReadOnly(true)
+                    btnDelete.isEnabled = false
+                    btnEditSave.isEnabled = false
+                    lifecycleScope.launch {
+                        val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+                        progressBar.visibility = View.VISIBLE
+
+                        saveNote()
+                        switchToReadOnly(true)
+
+                        btnDelete.isEnabled = true
+                        btnEditSave.isEnabled = true
+                        progressBar.visibility = View.GONE
+                    }
                 } else {
                     etTitle.requestFocus()
                     // Show the keyboard
@@ -161,7 +204,7 @@ class NoteActivity : AppCompatActivity() {
         editText.isCursorVisible = !readOnly
     }
 
-    private fun saveNote() {
+    suspend private fun saveNote() {
         // Copy current spinner selected text to etCategory field
         val spinnerCategory = findViewById<Spinner>(R.id.spinnerCategory)
         val adapter = spinnerCategory.adapter as ArrayAdapter<*>
@@ -184,24 +227,20 @@ class NoteActivity : AppCompatActivity() {
         note.keywords = etKeywords.getText().toString()
         note.content = etContent.getText().toString()
 
-        note.id = db.saveNote(note)
+        note.id = db.saveNote(note, splitKeywords(note.keywords))
 
         if (note.id != 0) {
-            db.deleteNoteKeywords(note.id)
-            val words = splitKeywords(note.keywords)
-            db.insertNoteKeywords(note.id, words)
-            Toast.makeText(this, getString(R.string.note_is_saved) , Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.note_is_saved), Toast.LENGTH_LONG).show()
         } else {
-            Toast.makeText(this, getString(R.string.note_is_not_saved) , Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.note_is_not_saved), Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun deleteNote(): Boolean {
+    suspend private fun deleteNote(): Boolean {
         val delOk: Boolean
 
         if (note.id != 0 && db.getNote(note.id, false) != null) { // if the note exists in db
             delOk = db.deleteNote(note.id)
-            db.deleteNoteKeywords(note.id)
         } else { // if this is a new note or note does not exists in the database anymore, then we simple set delOk = true
             delOk = true
         }

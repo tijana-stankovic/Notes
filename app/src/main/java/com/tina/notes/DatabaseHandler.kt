@@ -8,6 +8,10 @@ import android.database.SQLException
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.widget.Toast
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION){
 
@@ -56,7 +60,7 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
         db?.execSQL("DROP TABLE IF EXISTS Keyword_Note")
     }
 
-    fun getAllCategories() : ArrayList<Category> {
+    suspend fun getAllCategories() : ArrayList<Category> = withContext(Dispatchers.IO) {
         val catList: ArrayList<Category> = ArrayList<Category>()
         val catList0: ArrayList<Category> = getCategories(ROOT_PARENT)
         catList0.forEach {category ->
@@ -69,12 +73,12 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
                 }
             }
         }
-        return catList
+        return@withContext catList
     }
 
-    fun getCategories(parentId: Int) : ArrayList<Category> {
+    suspend fun getCategories(parentId: Int) : ArrayList<Category> = withContext(Dispatchers.IO) {
         val catList: ArrayList<Category> = ArrayList<Category>()
-        val db = this.readableDatabase
+        val db = this@DatabaseHandler.readableDatabase
         val cursor = db.rawQuery("SELECT * FROM category WHERE parent_id = ? ORDER BY _id", arrayOf(parentId.toString()))
 
         var id: Int
@@ -93,11 +97,11 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
 
         cursor.close()
 
-        return catList
+        return@withContext catList
     }
 
-    fun getCategory(id: Int) : Category? {
-        val db = this.readableDatabase
+    suspend fun getCategory(id: Int) : Category? = withContext(Dispatchers.IO) {
+        val db = this@DatabaseHandler.readableDatabase
         val cursor = db.rawQuery("SELECT * FROM category WHERE _id = ?", arrayOf(id.toString()))
 
         var id: Int
@@ -117,12 +121,12 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
 
         cursor.close()
 
-        return category
+        return@withContext category
     }
 
-    fun getNotesId(keyword: String, categoryId: Int): ArrayList<Int> {
+    suspend fun getNotesId(keyword: String, categoryId: Int): ArrayList<Int> = withContext(Dispatchers.IO) {
         val idList: ArrayList<Int> = ArrayList<Int>()
-        val db = this.readableDatabase
+        val db = this@DatabaseHandler.readableDatabase
         var cursor: Cursor
         if (keyword != "") {
             // By default, in SQLite, the LIKE operator is case-insensitive, so there is no need to deal with it
@@ -148,11 +152,11 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
 
         cursor.close()
 
-        return idList
+        return@withContext idList
     }
 
-    fun getNote(id: Int, readContent: Boolean) : Note? {
-        val db = this.readableDatabase
+    suspend fun getNote(id: Int, readContent: Boolean) : Note? = withContext(Dispatchers.IO) {
+        val db = this@DatabaseHandler.readableDatabase
         var cursor: Cursor
         if (readContent) {
             cursor = db.rawQuery("SELECT * FROM note WHERE _id = ?", arrayOf(id.toString()))
@@ -184,11 +188,32 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
 
         cursor.close()
 
-        return note
+        return@withContext note
     }
 
-    fun saveNote(note: Note): Int {
-        val db = this.writableDatabase
+    suspend fun saveNote(note: Note, keywords: List<String>): Int = withContext(Dispatchers.IO) {
+        val db = this@DatabaseHandler.writableDatabase
+        var noteId: Int
+
+        try {
+            db.beginTransaction()  // start DB transaction
+            noteId = _saveNote(db, note);
+            if (noteId != 0) {
+                _deleteNoteKeywords(db, noteId)
+                _insertNoteKeywords(db, noteId, keywords)
+            }
+            db.setTransactionSuccessful()  // commit DB changes
+        } catch (ex: Exception) {
+            noteId = 0
+        } finally {
+            // End the transaction (whether successful or not)
+            db.endTransaction()
+        }
+
+        return@withContext noteId
+    }
+
+    private fun _saveNote(db: SQLiteDatabase, note: Note): Int {
         var noteId: Int
 
         val values = ContentValues().apply {
@@ -218,8 +243,8 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
         return noteId
     }
 
-    fun saveCategory(category: Category): Int {
-        val db = this.writableDatabase
+    suspend fun saveCategory(category: Category): Int = withContext(Dispatchers.IO) {
+        val db = this@DatabaseHandler.writableDatabase
         var categoryId: Int
 
         val values = ContentValues().apply {
@@ -244,11 +269,31 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
             }
         }
 
-        return categoryId
+        return@withContext categoryId
     }
 
-    fun deleteNote(noteId: Int): Boolean {
-        val db = this.writableDatabase
+    suspend fun deleteNote(noteId: Int): Boolean = withContext(Dispatchers.IO) {
+        val db = this@DatabaseHandler.writableDatabase
+        var delOk : Boolean
+
+        try {
+            db.beginTransaction()  // start DB transaction
+            delOk = _deleteNote(db, noteId)
+            if (delOk) {
+                _deleteNoteKeywords(db, noteId)
+            }
+            db.setTransactionSuccessful()  // commit DB changes
+        } catch (ex: Exception) {
+            delOk = false
+        } finally {
+            // End the transaction (whether successful or not)
+            db.endTransaction()
+        }
+
+        return@withContext delOk
+    }
+
+    private fun _deleteNote(db: SQLiteDatabase, noteId: Int): Boolean {
         var delOk : Boolean
         val numOfDelRows = db.delete("note", "_id = ?", arrayOf(noteId.toString()))
         if (numOfDelRows > 0) {
@@ -259,8 +304,29 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
         return delOk
     }
 
-    fun deleteCategory(categoryId: Int): Boolean {
-        val db = this.writableDatabase
+    suspend fun deleteCategory(categoryId: Int, parentId: Int): Boolean = withContext(Dispatchers.IO) {
+        val db = this@DatabaseHandler.writableDatabase
+        var delOk : Boolean
+
+        try {
+            db.beginTransaction()  // start DB transaction
+            delOk = _deleteCategory(db, categoryId)
+            if (delOk) {
+                _changeNotesCategory(db, categoryId, parentId)
+                _changeCategoriesParent(db, categoryId, parentId)
+            }
+            db.setTransactionSuccessful()  // commit DB changes
+        } catch (ex: Exception) {
+            delOk = false
+        } finally {
+            // End the transaction (whether successful or not)
+            db.endTransaction()
+        }
+
+        return@withContext delOk
+    }
+
+    private fun _deleteCategory(db: SQLiteDatabase, categoryId: Int): Boolean {
         var delOk : Boolean
         val numOfDelRows = db.delete("category", "_id = ?", arrayOf(categoryId.toString()))
         if (numOfDelRows > 0) {
@@ -271,9 +337,7 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
         return delOk
     }
 
-    fun insertNoteKeywords(noteId: Int, keywords: List<String>) {
-        val db = this.writableDatabase
-
+    private fun _insertNoteKeywords(db: SQLiteDatabase, noteId: Int, keywords: List<String>) {
         for (keyword in keywords) {
             val values = ContentValues().apply {
                 put("keyword", keyword)
@@ -283,8 +347,7 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
         }
     }
 
-    fun deleteNoteKeywords(noteId: Int): Boolean {
-        val db = this.writableDatabase
+    private fun _deleteNoteKeywords(db: SQLiteDatabase, noteId: Int): Boolean {
         var delOk : Boolean
         val numOfDelRows = db.delete("keyword_note", "note_id = ?", arrayOf(noteId.toString()))
         if (numOfDelRows > 0) {
@@ -295,8 +358,7 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
         return delOk
     }
 
-    fun changeNotesCategory(fromCatId: Int, toCatId: Int) {
-        val db = this.writableDatabase
+    private fun _changeNotesCategory(db: SQLiteDatabase, fromCatId: Int, toCatId: Int) {
         val values = ContentValues().apply {
             put("cat_id", toCatId)
         }
@@ -304,8 +366,7 @@ class DatabaseHandler (val context: Context) : SQLiteOpenHelper(context, DATABAS
         db.update("note", values, "cat_id = ?", arrayOf(fromCatId.toString()))
     }
 
-    fun changeCategoriesParent(fromParentId: Int, toParentId: Int) {
-        val db = this.writableDatabase
+    private fun _changeCategoriesParent(db: SQLiteDatabase, fromParentId: Int, toParentId: Int) {
         val values = ContentValues().apply {
             put("parent_id", toParentId)
         }

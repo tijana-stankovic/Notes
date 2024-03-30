@@ -21,8 +21,19 @@
             android:layout_height="wrap_content"
             android:textColor="@color/yellow"
             android:hint="@string/search_keywords" />
-
     </com.google.android.material.textfield.TextInputLayout>
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:visibility="invisible"
+        android:indeterminateTint="@color/red"
+        app:layout_constraintTop_toTopOf="@id/keywordTextInputLayout"
+        app:layout_constraintBottom_toBottomOf="@id/keywordTextInputLayout"
+        app:layout_constraintRight_toRightOf="@id/keywordTextInputLayout"/>
 
     <Spinner
         android:id="@+id/spinnerCategory"

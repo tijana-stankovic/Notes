@@ -6,18 +6,12 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
-import android.widget.Toast
 import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 
-class NotesRecyclerAdapter(val context: Context, val notes: ArrayList<Note>) : RecyclerView.Adapter<NotesRecyclerAdapter.ViewHolder>() {
-    private var db: DatabaseHandler = DatabaseHandler(context)
-    var categories : ArrayList<Category> = ArrayList<Category>()
-
-
+class NotesRecyclerAdapter(val context: Context, val notes: ArrayList<Note>, val categories: ArrayList<Category>) : RecyclerView.Adapter<NotesRecyclerAdapter.ViewHolder>() {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): NotesRecyclerAdapter.ViewHolder {
-        categories = db.getAllCategories()
         val v = LayoutInflater.from(context).inflate(R.layout.notes_item, parent, false)
         return ViewHolder(v)
     }
