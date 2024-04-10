@@ -201,7 +201,7 @@ class CategoryActivity : AppCompatActivity() {
     }
 
     suspend private fun deleteCategory(): Boolean {
-        var delOk: Boolean = false
+        var delOk: Boolean
 
         if (category.id != 0 && db.getCategory(category.id) != null) { // if the category exists in db
             delOk = db.deleteCategory(category.id, category.parentId)

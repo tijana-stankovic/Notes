@@ -13,15 +13,16 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.activity.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-class NotesActivity : AppCompatActivity() {
-    private var db: DatabaseHandler = DatabaseHandler(this)
-    private var allCategories : ArrayList<Category> = ArrayList<Category>()
-    private var searchJob : Job? = null
+class NotesActivity : AppCompatActivity(), AdapterView.OnItemSelectedListener {
+    private val viewModel: NotesViewModel by viewModels {
+        NotesViewModelFactory(applicationContext)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,13 +42,14 @@ class NotesActivity : AppCompatActivity() {
         btnSearch.isEnabled = false
         btnNewNote.isEnabled = false
 
+        val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+        progressBar.visibility = View.VISIBLE
+
+        viewModel.readCategories()
+
         val currentContext = this
-        lifecycleScope.launch {
-            val progressBar = findViewById<ProgressBar>(R.id.progressBar)
-            progressBar.visibility = View.VISIBLE
 
-            allCategories = db.getAllCategories()
-
+        viewModel.allCategories.observe(this) { allCategories ->
             // Set the LayoutManager that RecycleView rvNotes will use
             rvNotes.layoutManager = LinearLayoutManager(currentContext)
             // Set the adapter that RecycleView rvNotes will use
@@ -57,40 +59,32 @@ class NotesActivity : AppCompatActivity() {
             adapter.setDropDownViewResource(R.layout.spinner_dropdown_category)
             spinnerCategory.adapter = adapter
 
+            spinnerCategory.onItemSelectedListener = this
+
             etKeywords.isEnabled = true
             spinnerCategory.isEnabled = true
             btnSearch.isEnabled = true
             btnNewNote.isEnabled = true
             progressBar.visibility = View.GONE
+        }
 
-            spinnerCategory.onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>, view: View, position: Int, id: Long) {
-                    // This function is called when an item is selected
-                    // 'position' is the position of the selected item in the Spinner list
-                    val selectedCat = allCategories[position]
-                    val selectedCatId = selectedCat.id
-
-                    val keywords = etKeywords.text.toString()
-
-                    refreshNoteList(keywords, selectedCatId)
-                }
-
-                override fun onNothingSelected(parent: AdapterView<*>) {
-                    // This function is called when no item is selected
-                    Toast.makeText(parent.context, getString(R.string.no_cat_is_selected), Toast.LENGTH_SHORT).show()
-                }
+        viewModel.noteList.observe(this) { noteList ->
+            val rvNotes = findViewById<RecyclerView>(R.id.rvNotes)
+            val noNotes = findViewById<TextView>(R.id.noNotes)
+            if (noteList.isEmpty()) {
+                noNotes.visibility = View.VISIBLE
+                rvNotes.visibility = View.GONE
+            } else {
+                rvNotes.adapter = NotesRecyclerAdapter(currentContext, noteList, viewModel.allCategories())
+                noNotes.visibility = View.GONE
+                rvNotes.visibility = View.VISIBLE
             }
+
+            progressBar.visibility = View.GONE
         }
 
         btnSearch.setOnClickListener {
-            val etKeywords = findViewById<EditText>(R.id.etKeywords)
-            val keywords = etKeywords.text.toString()
-
-            val spinnerCategory = findViewById<Spinner>(R.id.spinnerCategory)
-            val selectedPosition = spinnerCategory.selectedItemPosition
-            val selectedCatId = allCategories[selectedPosition].id
-
-            refreshNoteList(keywords, selectedCatId)
+            refreshNoteList()
         }
 
         btnNewNote.setOnClickListener {
@@ -98,81 +92,34 @@ class NotesActivity : AppCompatActivity() {
         }
     }
 
-    suspend private fun getNotesFromDB(keywords: String, categoryId: Int) : ArrayList<Note> {
-        val words = NoteActivity.splitKeywords(keywords)
-
-        var categories: ArrayList<Category> = ArrayList<Category>()
-        if (categoryId == DatabaseHandler.ROOT_PARENT) {
-            categories = allCategories; //db.getAllCategories()
-        } else {
-            val category = db.getCategory(categoryId)
-            if (category != null) {
-                categories.add(category)
-                // Add subcategories
-                val childCategories = db.getCategories(category.id)
-                childCategories.forEach { childCat ->
-                    categories.add(
-                        Category(
-                            id = childCat.id,
-                            parentId = childCat.parentId,
-                            name = childCat.name
-                        )
-                    )
-                }
-            }
+    // This function is called when an spinner item is selected
+    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+        // When activity is recreated (e.g. during screen rotation) this event will be triggered
+        // which is unnecessary (because spinner value is not really changed)
+        // So, this if prevent unnecessary refreshNoteList() call
+        if (viewModel.spinnerLastPosition != position) {
+            viewModel.spinnerLastPosition = position
+            refreshNoteList()
         }
-
-        // Now, we need to find all note IDs that have one of the specified keywords (any of words in words[] in its 'keywords' string) and
-        // belong to the category categoryID or its subcategories (note category is any of categories from categories[])
-        // Also, we want to keep the order in which we found the note IDs
-        // So, we will use LinkedHashSet (prevents duplicates and preserve insertion order)
-        var noteIDs: LinkedHashSet<Int> = LinkedHashSet<Int>()
-        for (category in categories) {
-            if (words.isEmpty()) {
-                noteIDs.addAll(db.getNotesId("", category.id))
-            } else {
-                for (word in words) {
-                    noteIDs.addAll(db.getNotesId(word, category.id))
-                }
-            }
-        }
-
-        var noteList: ArrayList<Note> = ArrayList<Note>()
-
-        // Now, reads notes data (without content)
-        var note: Note? = null
-        for (id in noteIDs) {
-            note = db.getNote(id, false) // false = no need to read note content
-            if (note != null) {
-                noteList.add(note)
-            }
-        }
-
-        return noteList
     }
 
-    private fun refreshNoteList(keywords: String, categoryId: Int) {
-        val currentContext = this
-        searchJob?.cancel()  // cancel previous search job (if it is not yet finished)
-        searchJob = lifecycleScope.launch {
-            val progressBar = findViewById<ProgressBar>(R.id.progressBar)
-            progressBar.visibility = View.VISIBLE
+    override fun onNothingSelected(parent: AdapterView<*>?) {
+        // This function is called when no item is selected
+        Toast.makeText(this, getString(R.string.no_cat_is_selected), Toast.LENGTH_SHORT).show()
+    }
 
-            var noteList: ArrayList<Note> = getNotesFromDB(keywords, categoryId)
+    private fun refreshNoteList() {
+        val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+        progressBar.visibility = View.VISIBLE
 
-            val rvNotes = findViewById<RecyclerView>(R.id.rvNotes)
-            val noNotes = findViewById<TextView>(R.id.noNotes)
-            if (noteList.isEmpty()) {
-                noNotes.visibility = View.VISIBLE
-                rvNotes.visibility = View.GONE
-            } else {
-                rvNotes.adapter = NotesRecyclerAdapter(currentContext, noteList, allCategories)
-                noNotes.visibility = View.GONE
-                rvNotes.visibility = View.VISIBLE
-            }
+        val etKeywords = findViewById<EditText>(R.id.etKeywords)
+        val keywords = etKeywords.text.toString()
 
-            progressBar.visibility = View.GONE
-        }
+        val spinnerCategory = findViewById<Spinner>(R.id.spinnerCategory)
+        val selectedPosition = spinnerCategory.selectedItemPosition
+        val selectedCatId = viewModel.allCategories()[selectedPosition].id
+
+        viewModel.searchNotes(keywords, selectedCatId)
     }
 
     private fun createNewNote() {
@@ -180,8 +127,8 @@ class NotesActivity : AppCompatActivity() {
             putExtra(NoteActivity.NOTE_ID, 0) // Value 0 indicates "New note"
 
             val spinnerCategory = findViewById<Spinner>(R.id.spinnerCategory)
-            // Note: because categories exists in Intent, we had to use this@NotesActivity.categories to reference to our attribute categories
-            putExtra(NoteActivity.CATEGORY_ID, this@NotesActivity.allCategories[spinnerCategory.selectedItemPosition].id)
+            // Note: because we are in Intent, we had to use this@NotesActivity.viewModel to reference to viewModel
+            putExtra(NoteActivity.CATEGORY_ID, this@NotesActivity.viewModel.allCategories()[spinnerCategory.selectedItemPosition].id)
         }
         startActivity(intent)
     }

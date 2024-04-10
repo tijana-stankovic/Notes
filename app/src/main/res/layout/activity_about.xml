@@ -6,15 +6,29 @@
     android:layout_height="match_parent"
     tools:context=".AboutActivity">
 
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guideline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintGuide_begin="1dp"
+        app:layout_constraintGuide_percent="0.25" />
+
     <ImageView
-        android:id="@+id/imageView"
-        android:layout_width="match_parent"
-        android:layout_height="200dp"
-        android:layout_margin="16dp"
+        android:id="@+id/aboutImage"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scaleType="centerInside"
+        android:layout_marginEnd="16dp"
+        android:layout_marginStart="16dp"
         app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/guideline"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:srcCompat="@drawable/logo_mff_en" />
 
     <TextView
+        android:id="@+id/aboutNotes"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:fontFamily="@font/dancing_script_bold"
@@ -22,36 +36,33 @@
         android:textSize="90sp"
         android:textStyle="bold"
         android:textColor="@color/aboutTextColor"
-        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.4" />
+        app:layout_constraintTop_toTopOf="@id/guideline" />
 
     <TextView
+        android:id="@+id/aboutVersion"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/version"
         android:textSize="24sp"
         android:textStyle="bold"
         android:textColor="@color/aboutTextColor"
-        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.55" />
+        app:layout_constraintTop_toBottomOf="@id/aboutNotes" />
 
     <TextView
+        android:id="@+id/aboutAuthor"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/author"
         android:textSize="24sp"
         android:textStyle="bold"
         android:textColor="@color/aboutTextColor"
-        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.8" />
+        app:layout_constraintTop_toBottomOf="@id/aboutVersion"
+        app:layout_constraintBottom_toBottomOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
